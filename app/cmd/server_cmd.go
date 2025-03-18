@@ -5,9 +5,11 @@ import (
 	"github.com/theshamuel/gemini-proxy/app/rest/api"
 	"github.com/theshamuel/gemini-proxy/app/service"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 // ServerCommand represent arguments that can be used to start server (application)
@@ -61,7 +63,12 @@ func (app *application) run(ctx context.Context) error {
 func (sc *ServerCommand) bootstrapApp() *application {
 	rest := &api.Rest{
 		Version: sc.Version,
-		Service: &service.GeminiProxy{},
+		Service: &service.GeminiProxy{
+			OriginURL: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=",
+			Client: http.Client{
+				Timeout: 5 * time.Second,
+			},
+		},
 	}
 
 	return &application{
