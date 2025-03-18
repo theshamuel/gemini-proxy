@@ -1,0 +1,17 @@
+services:
+  gemini-proxy:
+    build:
+      context: .
+    hostname: gemini-proxy
+    container_name: gemini-proxy
+    restart: always
+    ports:
+      - "9003:9003"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"
+    environment:
+      - TZ=Europe/Dublin
+      - DEBUG=false
