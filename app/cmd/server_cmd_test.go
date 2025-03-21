@@ -16,7 +16,7 @@ import (
 )
 
 func TestServerApp(t *testing.T) {
-	app, ctx, cancel := buildListCmdOpts(t, func(s ServerCommand) ServerCommand {
+	app, ctx, cancel := buildListCmdOpts(t, func(s ServerCmd) ServerCmd {
 		return s
 	})
 
@@ -35,7 +35,7 @@ func TestServerApp(t *testing.T) {
 	app.Wait()
 }
 
-func createAppFromCmd(t *testing.T, cmd ServerCommand) (*application, context.Context, context.CancelFunc) {
+func createAppFromCmd(t *testing.T, cmd ServerCmd) (*application, context.Context, context.CancelFunc) {
 	app := cmd.bootstrapApp()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -54,8 +54,8 @@ func waitHTTPServer(port int) {
 	}
 }
 
-func buildListCmdOpts(t *testing.T, fn func(o ServerCommand) ServerCommand) (*application, context.Context, context.CancelFunc) {
-	cmd := ServerCommand{}
+func buildListCmdOpts(t *testing.T, fn func(o ServerCmd) ServerCmd) (*application, context.Context, context.CancelFunc) {
+	cmd := ServerCmd{}
 	p := flags.NewParser(&cmd, flags.Default)
 	_, err := p.ParseArgs([]string{"--port=4356"})
 	require.NoError(t, err)

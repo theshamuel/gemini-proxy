@@ -1,35 +1,78 @@
 package main
 
 import (
-	"github.com/hashicorp/logutils"
-	"github.com/jessevdk/go-flags"
-	"github.com/theshamuel/gemini-proxy/app/cmd"
+	"fmt"
+	"github.com/theshamuel/gemini-proxy/app/config"
 	"log"
 	"os"
 	"os/signal"
 	"runtime"
 	"syscall"
+
+	"github.com/hashicorp/logutils"
+	"github.com/jessevdk/go-flags"
+	"github.com/theshamuel/gemini-proxy/app/cmd"
 )
 
 var version = "unknown"
 
 // Opts structure represent options to start application
 type Opts struct {
-	ServerCmd cmd.ServerCommand `command:"server"`
-	Debug     bool              `long:"debug" env:"DEBUG" description:"debug mode"`
+	ServerCmd cmd.ServerCmd `command:"server"`
+	Config    struct {
+		Enabled  bool   `long:"enabled" env:"ENABLED" description:"enable getting parameters from config. In that case all parameters will be read only form config"`
+		FileName string `long:"file-name" env:"FILE_NAME" default:"gemini-proxy.yml" description:"config file name"`
+	} `group:"config" namespace:"config" env-namespace:"CONFIG"`
 }
 
+var opts Opts
+
 func main() {
-	log.Printf("[INFO] Starting gemini-proxy version: %s\n", version)
-	var opts Opts
+	parseFlags()
+
+}
+
+func parseFlags() {
 	p := flags.NewParser(&opts, flags.Default)
-	setupLogLevel(opts.Debug)
+	p.CommandHandler = func(command flags.Commander, args []string) error {
+		c := command.(cmd.ServerCommand)
+
+		var cnf *config.Config
+		if opts.Config.Enabled {
+			cnf = &config.Config{
+				FileName: opts.Config.FileName,
+			}
+		}
+
+		if opts.Config.Enabled {
+			var err error
+			var co *config.CommonOpts
+
+			if co, err = cnf.GetCommon(); err != nil {
+				panic(fmt.Errorf("[ERROR] can not read config file, %w", err))
+			}
+			opts.ServerCmd.GeminiAPIKey = co.GeminiAPIKey
+			opts.ServerCmd.DelayRequests = co.DelayRequests
+			opts.ServerCmd.TLS.Enabled = co.TLS.Enabled
+			opts.ServerCmd.TLS.CertPath = co.TLS.CertPath
+			opts.ServerCmd.TLS.PrivateKeyPath = co.TLS.PrivateKeyPath
+			opts.ServerCmd.Debug = co.Debug
+			opts.ServerCmd.Version = version
+		}
+
+		setupLogLevel(opts.ServerCmd.Debug)
+
+		err := c.Execute(args)
+		if err != nil {
+			log.Printf("[ERROR] failed with %+v", err)
+		}
+		return err
+	}
 	if _, err := p.Parse(); err != nil {
 		if flagsErr, ok := err.(*flags.Error); ok && flagsErr.Type == flags.ErrHelp {
 			os.Exit(0)
 		}
-		log.Printf("[ERROR] during parsing flags: %+v", err)
-		os.Exit(3)
+		os.Exit(1)
 	}
 }
 

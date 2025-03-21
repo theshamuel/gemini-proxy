@@ -60,45 +60,6 @@ func TestRest_Ping(t *testing.T) {
 	assert.Equal(t, http.StatusOK, code)
 }
 
-//func TestRest_Min(t *testing.T) {
-//	ts, _, teardown := startHTTPServer()
-//	defer teardown()
-//	rBody := `{
-//				"numbers": [1,2,3,4,5],
-//				"quantifier": 3
-//			  }`
-//	res, code := getRequest(t, ts.URL+"/api/v1/min", rBody)
-//	assert.NotNil(t, res)
-//	assert.Equal(t, "{\"numbers\":[1,2,3]}\n", res)
-//	assert.Equal(t, http.StatusOK, code)
-//}
-//
-//func TestRest_Min_CalculationError(t *testing.T) {
-//	ts, _, teardown := startHTTPServer()
-//	defer teardown()
-//	rBody := `{
-//				"numbers": [3, 2, 1, 10, -1, 200, -10],
-//				"quantifier": 101
-//			  }`
-//	res, code := getRequest(t, ts.URL+"/api/v1/min", rBody)
-//	assert.NotNil(t, res)
-//	assert.Equal(t, "{\"code\":0,\"details\":\"\",\"error\":\"failed calculate min: quantifier is more than count of input data set\"}\n", res)
-//	assert.Equal(t, http.StatusInternalServerError, code)
-//}
-//
-//func TestRest_Min_InputError(t *testing.T) {
-//	ts, _, teardown := startHTTPServer()
-//	defer teardown()
-//	rBody := `{
-//				"numbers": [3, 2, 1, 10, -1, 200, -10},
-//				"quantifier": 1
-//			  `
-//	res, code := getRequest(t, ts.URL+"/api/v1/min", rBody)
-//	assert.NotNil(t, res)
-//	assert.Equal(t, "{\"code\":0,\"details\":\"\",\"error\":\"invalid character '}' after array element\"}\n", res)
-//	assert.Equal(t, http.StatusInternalServerError, code)
-//}
-
 func startHTTPServer() (ts *httptest.Server, rest *Rest, gracefulTeardown func()) {
 	rest = &Rest{
 		Version: "test",

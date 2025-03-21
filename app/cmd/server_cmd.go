@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"github.com/theshamuel/gemini-proxy/app/config"
 	"github.com/theshamuel/gemini-proxy/app/rest/api"
 	"github.com/theshamuel/gemini-proxy/app/service"
 	"log"
@@ -12,23 +13,34 @@ import (
 	"time"
 )
 
-// ServerCommand represent arguments that can be used to start server (application)
-type ServerCommand struct {
-	Port    int `long:"port" env:"SERVER_PORT" default:"9003" description:"application port"`
+type ServerCommand interface {
+	Execute(args []string) error
+}
+
+// ServerCmd represent arguments that can be used to start server (application)
+type ServerCmd struct {
+	config.CommonOpts
+	Port    int `long:"port" env:"SERVER_PORT" default:"9443" description:"application port"`
 	Version string
 }
 
 type application struct {
-	*ServerCommand
+	ServerCmd
 	rest       *api.Rest
 	terminated chan struct{}
 }
 
 // Execute is the entry point for server command
-func (sc *ServerCommand) Execute(_ []string) error {
+func (sc ServerCmd) Execute(_ []string) error {
 	log.Printf("[INFO] start app server")
 	log.Printf("[INFO] server args:\n"+
-		"		              port: %d;\n", sc.Port)
+		"                     port: %d;\n"+
+		"                     TLS enabled: %t;\n"+
+		"                         Cert path: %s;\n"+
+		"                         Pribate key path: %s;\n",
+		sc.Port, sc.TLS.Enabled, sc.TLS.CertPath, sc.TLS.PrivateKeyPath)
+
+	log.Printf("[DEBUG] common options: %+v", sc.CommonOpts)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
@@ -39,6 +51,7 @@ func (sc *ServerCommand) Execute(_ []string) error {
 		cancel()
 	}()
 	app := sc.bootstrapApp()
+	log.Printf("[INFO] Starting Gemini Proxy:[version: %s] ...\n", sc.Version)
 	if err := app.run(ctx); err != nil {
 		log.Printf("[ERROR] Server terminated with error %v", err)
 		return err
@@ -60,21 +73,26 @@ func (app *application) run(ctx context.Context) error {
 	return nil
 }
 
-func (sc *ServerCommand) bootstrapApp() *application {
+func (sc ServerCmd) bootstrapApp() *application {
 	rest := &api.Rest{
-		Version: sc.Version,
+		Version:       sc.Version,
+		DelayRequests: sc.DelayRequests,
 		Service: &service.GeminiProxy{
 			OriginURL: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=",
 			Client: http.Client{
-				Timeout: 5 * time.Second,
+				Timeout: 20 * time.Second,
 			},
+			APIKey: sc.GeminiAPIKey,
 		},
+		TLSEnabled:     sc.TLS.Enabled,
+		CertPath:       sc.TLS.CertPath,
+		PrivateKeyPath: sc.TLS.PrivateKeyPath,
 	}
 
 	return &application{
-		ServerCommand: sc,
-		rest:          rest,
-		terminated:    make(chan struct{}),
+		ServerCmd:  sc,
+		rest:       rest,
+		terminated: make(chan struct{}),
 	}
 }
 
