@@ -1,0 +1,14 @@
+[Unit]
+Description=Adapter for Gemini AI
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+User=root
+ExecStart=/usr/bin/gemini-proxy server --config.enabled --config.file-name=/etc/gemini-proxy/gemini-proxy.yml
+
+[Install]
+WantedBy=multi-user.target

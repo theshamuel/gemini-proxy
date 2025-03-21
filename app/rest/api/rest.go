@@ -10,7 +10,6 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/theshamuel/gemini-proxy/app/rest"
-	"github.com/theshamuel/gemini-proxy/app/service"
 	"io"
 	"log"
 	"net/http"
@@ -20,14 +19,19 @@ import (
 
 // Rest structure represents abstraction contains http server, exposed interface and version
 type Rest struct {
-	Service    restInterface
-	Version    string
-	httpServer *http.Server
-	lock       sync.Mutex
+	Service        restInterface
+	Version        string
+	httpServer     *http.Server
+	DelayRequests  int
+	TLSEnabled     bool
+	CertPath       string
+	PrivateKeyPath string
+	lock           sync.Mutex
 }
 
 type restInterface interface {
-	Send(request service.GeminiProxyRequest) (*service.GeminiProxyResponse, error)
+	Send(request io.ReadCloser) ([]byte, error)
+	GetMutex() *sync.Mutex
 }
 
 // Run http server
@@ -36,7 +40,16 @@ func (s *Rest) Run(port int) {
 	s.lock.Lock()
 	s.httpServer = s.buildHTTPServer(port, s.routes())
 	s.lock.Unlock()
-	err := s.httpServer.ListenAndServe()
+	var err error
+	if s.TLSEnabled {
+		err = s.httpServer.ListenAndServeTLS(s.CertPath, s.PrivateKeyPath)
+	} else {
+		err = s.httpServer.ListenAndServe()
+	}
+
+	if err != nil {
+		log.Printf("[ERROR] Run http server on port %d failed: %v", port, err)
+	}
 	log.Printf("[WARN] http server terminated, %s", err)
 }
 
@@ -69,12 +82,14 @@ func (s *Rest) routes() chi.Router {
 	router := chi.NewRouter()
 	router.Use(middleware.Throttle(1000), middleware.RealIP, middleware.Recoverer, middleware.Logger)
 
-	corsMiddleware := cors.New(cors.Options{
-		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{"GET", "OPTIONS"},
-		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
-		MaxAge:         300,
-	})
+	//corsMiddleware := cors.New(cors.Options{
+	//	AllowedOrigins: []string{"*"},
+	//	AllowedMethods: []string{"GET", "POST", "OPTIONS"},
+	//	AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
+	//	MaxAge:         300,
+	//})
+
+	corsMiddleware := cors.AllowAll()
 
 	//health check api
 	router.Use(corsMiddleware.Handler)
@@ -89,13 +104,13 @@ func (s *Rest) routes() chi.Router {
 		})
 	})
 
-	router.Route("/api/v1/", func(rapi chi.Router) {
+	router.Route("/api/", func(rapi chi.Router) {
 		//app api
 		rapi.Group(func(api chi.Router) {
 			api.Use(middleware.Timeout(30 * time.Second))
 			api.Use(tollbooth_chi.LimitHandler(tollbooth.NewLimiter(50, nil)))
 			api.Use(middleware.NoCache)
-			api.Post("/send", s.sendHandler)
+			api.Post("/*", s.sendHandler)
 		})
 	})
 
@@ -104,14 +119,15 @@ func (s *Rest) routes() chi.Router {
 
 // nolint:dupl
 func (s *Rest) sendHandler(w http.ResponseWriter, r *http.Request) {
-	gpReq := service.GeminiProxyRequest{}
-	err := DecodeJSON(r.Body, &gpReq)
-	if err != nil {
-		log.Printf("[ERROR] can not decode request")
-		rest.SendErrorJSON(w, r, http.StatusInternalServerError, err, rest.ErrServerInternal, "")
-		return
+
+	if s.DelayRequests > 0 {
+		s.Service.GetMutex().Lock()
+		defer s.Service.GetMutex().Unlock()
+		time.Sleep(1 * time.Second)
 	}
-	mathResp, err := s.Service.Send(gpReq)
+
+	resp, err := s.Service.Send(r.Body)
+
 	if err != nil {
 		log.Printf("[ERROR] can not calculate min with error: %s", err.Error())
 		rest.SendErrorJSON(w, r, http.StatusInternalServerError, err, rest.ErrServerInternal, "")
@@ -119,9 +135,9 @@ func (s *Rest) sendHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(mathResp)
+	_, err = w.Write(resp)
 	if err != nil {
-		log.Printf("[ERROR] can not encode response")
+		log.Printf("[ERROR] can not write response")
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 }

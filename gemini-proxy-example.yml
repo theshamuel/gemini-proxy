@@ -1,0 +1,7 @@
+gemini-api-key: "test"
+tls:
+  enabled: false
+  cert-path: domain1.crt
+  private-key-path: domain1.key
+delay-requests: 0
+debug: false

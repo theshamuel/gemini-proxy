@@ -1,0 +1,75 @@
+signs:
+  - artifacts: checksum
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+      - arm
+      - 386
+    ignore:
+      - goos: windows
+        goarch: arm
+    dir: app
+    ldflags: "-s -w -X main.version={{.Tag}}-{{.ShortCommit}}-{{.CommitDate}}"
+
+archives:
+  - id: gemini-proxy
+    rlcp: true
+    name_template: >-
+      {{ .ProjectName }}_{{ .Tag }}_
+      {{- if eq .Os "darwin" }}MacOS_
+      {{- else }}{{ title .Os }}_{{ end }}
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+      - README.md
+
+nfpms:
+  -
+    id: gemini-proxy
+    package_name: gemini-proxy
+    file_name_template: >-
+      {{ .ProjectName }}_{{ .Tag }}_
+      {{- if eq .Os "darwin" }}MacOS_
+      {{- else }}{{ title .Os }}_{{ end }}
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+    vendor: Alex Shamuel
+    homepage: https://theshamuel.com
+    maintainer: Alex Shamuel <theshamuel@gmail.com>
+    description: HTTP/HTTPS checker
+    license: MIT
+    formats:
+      - apk
+      - deb
+      - rpm
+    bindir: /usr/bin
+    epoch: 1
+    release: 1
+    contents:
+      - src: gemini-proxy.service
+        dst: /etc/systemd/system/gemini-proxy.service
+
+      - src: gemini-proxy-example.yml
+        dst: /etc/gemini-proxy/gemini-proxy.yml
+        type: config
+
+      - src: /usr/bin/gemini-proxy
+        dst: /usr/local/bin/gemini-proxy
+        type: "symlink"
+    scripts:
+      postinstall: "etc/post-install.sh"
+      preremove: "etc/pre-remove.sh"
